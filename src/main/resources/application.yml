@@ -15,20 +15,68 @@ spring:
     baseline-on-migrate: true
 
   data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
     mongodb:
       uri: mongodb://${MONGO_USER:admin}:${MONGO_PASSWORD:password123}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DB:wallet_db}?authSource=admin
 
+  # Kafka Configuration
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 10
+      buffer-memory: 33554432
+
 application:
   wallet:
+    # RPC Provider Configuration
+    # For production, use Infura/Alchemy with API keys via environment variables
+    # Free tier limits: Infura 100k req/day, Alchemy 300M CU/month
+    rpc:
+      # Global API key for Infura (if using Infura for all chains)
+      infura-api-key: ${INFURA_API_KEY:}
+      # Per-chain rate limiting
+      max-concurrent-requests: ${RPC_MAX_CONCURRENT:10}
+      request-timeout-ms: ${RPC_TIMEOUT_MS:30000}
+      retry-attempts: ${RPC_RETRY_ATTEMPTS:3}
+      retry-delay-ms: ${RPC_RETRY_DELAY_MS:1000}
     chains:
       ethereum:
-        rpc-url: ${ETH_RPC_URL:https://mainnet.infura.io/v3/your-api-key}
+        chain-id: 1
+        rpc-url: ${ETH_RPC_URL:https://mainnet.infura.io/v3/${INFURA_API_KEY:demo}}
+        block-confirmations: 12
+        native-symbol: ETH
+        native-decimals: 18
       bsc:
-        rpc-url: ${BSC_RPC_URL:https://bsc-dataseed.binance.org/}
+        chain-id: 56
+        rpc-url: ${BSC_RPC_URL:https://bsc-dataseed1.binance.org/}
+        block-confirmations: 15
+        native-symbol: BNB
+        native-decimals: 18
       polygon:
-        rpc-url: ${POLYGON_RPC_URL:https://polygon-rpc.com}
+        chain-id: 137
+        rpc-url: ${POLYGON_RPC_URL:https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY:demo}}
+        block-confirmations: 128
+        native-symbol: MATIC
+        native-decimals: 18
       arbitrum:
-        rpc-url: ${ARBITRUM_RPC_URL:https://arb1.arbitrum.io/rpc}
+        chain-id: 42161
+        rpc-url: ${ARBITRUM_RPC_URL:https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY:demo}}
+        block-confirmations: 64
+        native-symbol: ETH
+        native-decimals: 18
+
+# Balance Sync Configuration
+balance:
+  sync:
+    enabled: ${BALANCE_SYNC_ENABLED:true}
+    interval-ms: ${BALANCE_SYNC_INTERVAL_MS:300000}  # 5 minutes
+    batch-size: ${BALANCE_SYNC_BATCH_SIZE:100}
+    lock-ttl-minutes: ${BALANCE_SYNC_LOCK_TTL:10}
 
 springdoc:
   api-docs:

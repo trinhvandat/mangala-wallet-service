@@ -16,25 +16,25 @@ public class ChainAdapterConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "application.wallet.chains.ethereum", name = "rpc-url")
-    public EvmChainAdapter ethereumChainAdapter(ChainProperties properties, EvmAddressValidator validator) {
-        return new EvmChainAdapter(ChainType.ETHEREUM, properties, validator);
+    public EvmChainAdapter ethereumChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
+        return new EvmChainAdapter(ChainType.ETHEREUM, properties, validator, tokenConfig);
     }
 
     @Bean
     @ConditionalOnProperty(prefix = "application.wallet.chains.bsc", name = "rpc-url")
-    public EvmChainAdapter bscChainAdapter(ChainProperties properties, EvmAddressValidator validator) {
-        return new EvmChainAdapter(ChainType.BSC, properties, validator);
+    public EvmChainAdapter bscChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
+        return new EvmChainAdapter(ChainType.BSC, properties, validator, tokenConfig);
     }
 
     @Bean
     @ConditionalOnProperty(prefix = "application.wallet.chains.polygon", name = "rpc-url")
-    public EvmChainAdapter polygonChainAdapter(ChainProperties properties, EvmAddressValidator validator) {
-        return new EvmChainAdapter(ChainType.POLYGON, properties, validator);
+    public EvmChainAdapter polygonChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
+        return new EvmChainAdapter(ChainType.POLYGON, properties, validator, tokenConfig);
     }
 
     @Bean
     @ConditionalOnProperty(prefix = "application.wallet.chains.arbitrum", name = "rpc-url")
-    public EvmChainAdapter arbitrumChainAdapter(ChainProperties properties, EvmAddressValidator validator) {
-        return new EvmChainAdapter(ChainType.ARBITRUM, properties, validator);
+    public EvmChainAdapter arbitrumChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
+        return new EvmChainAdapter(ChainType.ARBITRUM, properties, validator, tokenConfig);
     }
 }
