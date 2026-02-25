@@ -1,0 +1,6 @@
+[submodule "mangala-common-security"]
+	path = mangala-common-security
+	url = https://github.com/trinhvandat/mangala-common-security.git
+[submodule "mangala-exception"]
+	path = mangala-exception
+	url = https://github.com/trinhvandat/mangala-exception.git
