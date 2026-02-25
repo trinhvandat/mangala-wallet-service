@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: mangala-wallet-service
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mangala_dev}?currentSchema=${DB_SCHEMA:wallet}
+    username: ${DB_USERNAME:wallet_service}
+    password: ${DB_PASSWORD:wallet123}
+
+  flyway:
+    enabled: true
+    schemas: wallet
+    default-schema: wallet
+    locations: classpath:/migration
+    baseline-on-migrate: true
+
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USER:admin}:${MONGO_PASSWORD:password123}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DB:wallet_db}?authSource=admin
+
+application:
+  wallet:
+    chains:
+      ethereum:
+        rpc-url: ${ETH_RPC_URL:https://mainnet.infura.io/v3/your-api-key}
+      bsc:
+        rpc-url: ${BSC_RPC_URL:https://bsc-dataseed.binance.org/}
+      polygon:
+        rpc-url: ${POLYGON_RPC_URL:https://polygon-rpc.com}
+      arbitrum:
+        rpc-url: ${ARBITRUM_RPC_URL:https://arb1.arbitrum.io/rpc}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    org.flywaydb: DEBUG
+    org.mangala.wallet: DEBUG

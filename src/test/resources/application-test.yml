@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: mangala-wallet-service-test
+
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/.well-known/jwks.json
+
+application:
+  wallet:
+    chains:
+      ethereum:
+        rpc-url: https://mainnet.infura.io/v3/test
+      bsc:
+        rpc-url: https://bsc-dataseed.binance.org/
+
+logging:
+  level:
+    root: WARN
+    org.mangala.wallet: DEBUG
