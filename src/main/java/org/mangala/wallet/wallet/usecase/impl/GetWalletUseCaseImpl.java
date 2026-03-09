@@ -8,6 +8,8 @@ import org.mangala.wallet.shared.exception.WalletException;
 import org.mangala.wallet.wallet.adapter.repository.WalletRepository;
 import org.mangala.wallet.wallet.domain.WalletEntity;
 import org.mangala.wallet.wallet.usecase.GetWalletUseCase;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,34 @@ public class GetWalletUseCaseImpl implements GetWalletUseCase {
         return wallets.stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse getByUserIdPaginated(UUID userId, ChainType chainType, Pageable pageable) {
+        log.debug("Getting paginated wallets for user: {}, chain: {}, page: {}, size: {}",
+                userId, chainType, pageable.getPageNumber(), pageable.getPageSize());
+
+        Page<WalletEntity> walletPage;
+
+        if (chainType != null) {
+            walletPage = walletRepository.findByUserIdAndChainTypeAndIsActiveTrueOrderByCreatedAtDesc(
+                    userId, chainType.name(), pageable);
+        } else {
+            walletPage = walletRepository.findByUserIdAndIsActiveTrueOrderByCreatedAtDesc(userId, pageable);
+        }
+
+        List<Response> wallets = walletPage.getContent().stream()
+                .map(this::mapToResponse)
+                .toList();
+
+        return PagedResponse.builder()
+                .wallets(wallets)
+                .page(walletPage.getNumber())
+                .size(walletPage.getSize())
+                .totalElements(walletPage.getTotalElements())
+                .totalPages(walletPage.getTotalPages())
+                .build();
     }
 
     private Response mapToResponse(WalletEntity wallet) {

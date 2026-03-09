@@ -2,8 +2,10 @@ package org.mangala.wallet.balance.sync;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.mangala.wallet.balance.health.BalanceSyncHealthIndicator;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 @EnableScheduling
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "balance.sync.enabled", havingValue = "true", matchIfMissing = true)
 public class BalanceSyncScheduler {
 
     private static final String LOCK_NAME = "balance-sync-lock";
@@ -32,6 +35,7 @@ public class BalanceSyncScheduler {
 
     private final RedissonClient redissonClient;
     private final BalanceSyncService balanceSyncService;
+    private final BalanceSyncHealthIndicator healthIndicator;
 
     /**
      * Runs every 5 minutes.  Acquires a distributed lock before delegating to
@@ -56,7 +60,22 @@ public class BalanceSyncScheduler {
             }
 
             log.info("Balance sync lock acquired, starting sync");
+            healthIndicator.recordSyncStart();
+
             SyncResult result = balanceSyncService.syncAll();
+
+            // Record health status based on result
+            if (result.walletsFailed() == 0) {
+                healthIndicator.recordSuccess(result);
+            } else if (result.walletsSucceeded() > 0) {
+                // Partial success - still record as success but log warning
+                healthIndicator.recordSuccess(result);
+                log.warn("Balance sync completed with {} failures out of {} wallets",
+                        result.walletsFailed(), result.walletsProcessed());
+            } else {
+                healthIndicator.recordFailure("All wallet syncs failed");
+            }
+
             log.info("Balance sync finished: walletsProcessed={}, succeeded={}, failed={}, tokensFound={}, durationMs={}",
                     result.walletsProcessed(),
                     result.walletsSucceeded(),
@@ -67,8 +86,10 @@ public class BalanceSyncScheduler {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Balance sync scheduler interrupted while acquiring lock", e);
+            healthIndicator.recordFailure("Interrupted: " + e.getMessage());
         } catch (Exception e) {
             log.error("Balance sync failed with unexpected error", e);
+            healthIndicator.recordFailure(e.getMessage());
         } finally {
             if (acquired && lock.isHeldByCurrentThread()) {
                 lock.unlock();

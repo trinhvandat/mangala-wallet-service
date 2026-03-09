@@ -1,4 +1,8 @@
 spring:
+  threads:
+    virtual:
+      enabled: true
+
   application:
     name: mangala-wallet-service
 
@@ -30,6 +34,22 @@ spring:
       batch-size: 16384
       linger-ms: 10
       buffer-memory: 33554432
+    consumer:
+      group-id: wallet-balance-aggregator
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 3
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60000
+      cache-null-values: false
 
 application:
   wallet:
@@ -69,6 +89,12 @@ application:
         block-confirmations: 64
         native-symbol: ETH
         native-decimals: 18
+      sepolia:
+        chain-id: 11155111
+        rpc-url: ${SEPOLIA_RPC_URL:https://sepolia.infura.io/v3/${INFURA_API_KEY:demo}}
+        block-confirmations: 3
+        native-symbol: ETH
+        native-decimals: 18
 
 # Balance Sync Configuration
 balance:
@@ -81,11 +107,59 @@ balance:
 springdoc:
   api-docs:
     path: /v3/api-docs
+    enabled: true
   swagger-ui:
     path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  show-actuator: false
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
 
 logging:
   level:
     root: INFO
     org.flywaydb: DEBUG
     org.mangala.wallet: DEBUG
+
+server:
+  port: 8081
+
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      rpcCircuitBreaker:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - java.util.concurrent.TimeoutException
+  retry:
+    instances:
+      rpcRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+
+# Portfolio Configuration
+portfolio:
+  cache:
+    ttl-seconds: ${PORTFOLIO_CACHE_TTL:60}
+  price:
+    mock-enabled: ${PRICE_MOCK_ENABLED:true}
+    history-enabled: ${PRICE_HISTORY_ENABLED:true}
+    recording-interval-ms: ${PRICE_RECORDING_INTERVAL_MS:300000}
+    cleanup-cron: ${PRICE_CLEANUP_CRON:0 0 * * * *}

@@ -1,0 +1,154 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify local modules
+        run: |
+          test -f mangala-common-security/pom.xml
+          test -f mangala-exception/pom.xml
+
+      - name: Install local dependency modules
+        run: |
+          mvn -B -q -f mangala-common-security/pom.xml install -DskipTests
+          mvn -B -q -f mangala-exception/pom.xml install -DskipTests
+
+      - name: Build with Maven
+        run: mvn -B clean compile -DskipTests
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: target/
+          retention-days: 1
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify local modules
+        run: |
+          test -f mangala-common-security/pom.xml
+          test -f mangala-exception/pom.xml
+
+      - name: Install local dependency modules
+        run: |
+          mvn -B -q -f mangala-common-security/pom.xml install -DskipTests
+          mvn -B -q -f mangala-exception/pom.xml install -DskipTests
+
+      - name: Run unit tests
+        run: mvn -B test -Dspring.profiles.active=test
+
+      - name: Run integration tests
+        run: mvn -B verify -Dspring.profiles.active=test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
+          retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify local modules
+        run: |
+          test -f mangala-common-security/pom.xml
+          test -f mangala-exception/pom.xml
+
+      - name: Install local dependency modules
+        run: |
+          mvn -B -q -f mangala-common-security/pom.xml install -DskipTests
+          mvn -B -q -f mangala-exception/pom.xml install -DskipTests
+
+      - name: Build JAR
+        run: mvn -B clean package -DskipTests
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix={{branch}}-,format=short
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

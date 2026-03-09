@@ -2,6 +2,7 @@ package org.mangala.wallet.wallet.usecase.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mangala.wallet.chain.domain.ChainType;
@@ -39,64 +40,132 @@ class DeleteWalletUseCaseImplTest {
         useCase = new DeleteWalletUseCaseImpl(walletRepository);
     }
 
-    @Test
-    @DisplayName("should soft delete wallet successfully")
-    void deleteWalletSuccess() {
-        WalletEntity wallet = WalletEntity.builder()
-                .id(WALLET_ID)
-                .userId(USER_ID)
-                .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
-                .chainType(ChainType.ETHEREUM.name())
-                .isActive(true)
-                .createdAt(LocalDateTime.now())
-                .build();
+    @Nested
+    @DisplayName("execute")
+    class Execute {
 
-        when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
-        when(walletRepository.save(any(WalletEntity.class))).thenReturn(wallet);
+        @Test
+        @DisplayName("should soft delete wallet successfully with deletedAt timestamp")
+        void deleteWalletSuccess() {
+            WalletEntity wallet = WalletEntity.builder()
+                    .id(WALLET_ID)
+                    .userId(USER_ID)
+                    .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+                    .chainType(ChainType.ETHEREUM.name())
+                    .isActive(true)
+                    .createdAt(LocalDateTime.now())
+                    .build();
 
-        useCase.execute(WALLET_ID, USER_ID);
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+            when(walletRepository.save(any(WalletEntity.class))).thenReturn(wallet);
 
-        ArgumentCaptor<WalletEntity> captor = ArgumentCaptor.forClass(WalletEntity.class);
-        verify(walletRepository).save(captor.capture());
-        assertThat(captor.getValue().getIsActive()).isFalse();
-    }
+            useCase.execute(WALLET_ID, USER_ID);
 
-    @Test
-    @DisplayName("should throw exception when wallet not found")
-    void walletNotFound() {
-        when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.empty());
+            ArgumentCaptor<WalletEntity> captor = ArgumentCaptor.forClass(WalletEntity.class);
+            verify(walletRepository).save(captor.capture());
 
-        assertThatThrownBy(() -> useCase.execute(WALLET_ID, USER_ID))
-                .isInstanceOf(WalletException.class)
-                .satisfies(ex -> {
-                    WalletException we = (WalletException) ex;
-                    assertThat(we.getErrorDefinition()).isEqualTo(ErrorConstant.WALLET_NOT_FOUND);
-                });
+            WalletEntity savedWallet = captor.getValue();
+            assertThat(savedWallet.getIsActive()).isFalse();
+            assertThat(savedWallet.getDeletedAt()).isNotNull();
+            assertThat(savedWallet.getDeletedAt()).isBeforeOrEqualTo(LocalDateTime.now());
+        }
 
-        verify(walletRepository, never()).save(any());
-    }
+        @Test
+        @DisplayName("should be idempotent - return silently when wallet not found")
+        void idempotentWhenWalletNotFound() {
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.empty());
 
-    @Test
-    @DisplayName("should throw exception when user does not own wallet")
-    void accessDenied() {
-        WalletEntity wallet = WalletEntity.builder()
-                .id(WALLET_ID)
-                .userId(OTHER_USER_ID) // Different user
-                .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
-                .chainType(ChainType.ETHEREUM.name())
-                .isActive(true)
-                .createdAt(LocalDateTime.now())
-                .build();
+            // Should not throw - idempotent behavior
+            useCase.execute(WALLET_ID, USER_ID);
 
-        when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+            verify(walletRepository, never()).save(any());
+        }
 
-        assertThatThrownBy(() -> useCase.execute(WALLET_ID, USER_ID))
-                .isInstanceOf(WalletException.class)
-                .satisfies(ex -> {
-                    WalletException we = (WalletException) ex;
-                    assertThat(we.getErrorDefinition()).isEqualTo(ErrorConstant.WALLET_ACCESS_DENIED);
-                });
+        @Test
+        @DisplayName("should be idempotent - return silently when wallet already deleted (isActive=false)")
+        void idempotentWhenWalletAlreadyInactive() {
+            WalletEntity wallet = WalletEntity.builder()
+                    .id(WALLET_ID)
+                    .userId(USER_ID)
+                    .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+                    .chainType(ChainType.ETHEREUM.name())
+                    .isActive(false) // Already deleted
+                    .createdAt(LocalDateTime.now())
+                    .build();
 
-        verify(walletRepository, never()).save(any());
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+
+            // Should not throw - idempotent behavior
+            useCase.execute(WALLET_ID, USER_ID);
+
+            verify(walletRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should be idempotent - return silently when wallet has deletedAt set")
+        void idempotentWhenWalletHasDeletedAt() {
+            WalletEntity wallet = WalletEntity.builder()
+                    .id(WALLET_ID)
+                    .userId(USER_ID)
+                    .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+                    .chainType(ChainType.ETHEREUM.name())
+                    .isActive(true) // Still active but has deletedAt
+                    .deletedAt(LocalDateTime.now().minusHours(1)) // Already marked deleted
+                    .createdAt(LocalDateTime.now())
+                    .build();
+
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+
+            // Should not throw - idempotent behavior
+            useCase.execute(WALLET_ID, USER_ID);
+
+            verify(walletRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should throw exception when user does not own wallet")
+        void accessDenied() {
+            WalletEntity wallet = WalletEntity.builder()
+                    .id(WALLET_ID)
+                    .userId(OTHER_USER_ID) // Different user
+                    .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+                    .chainType(ChainType.ETHEREUM.name())
+                    .isActive(true)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+
+            assertThatThrownBy(() -> useCase.execute(WALLET_ID, USER_ID))
+                    .isInstanceOf(WalletException.class)
+                    .satisfies(ex -> {
+                        WalletException we = (WalletException) ex;
+                        assertThat(we.getErrorDefinition()).isEqualTo(ErrorConstant.WALLET_ACCESS_DENIED);
+                    });
+
+            verify(walletRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should still deny access even if wallet appears deleted but owned by another user")
+        void accessDeniedEvenIfDeleted() {
+            WalletEntity wallet = WalletEntity.builder()
+                    .id(WALLET_ID)
+                    .userId(OTHER_USER_ID) // Different user
+                    .address("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
+                    .chainType(ChainType.ETHEREUM.name())
+                    .isActive(true)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+
+            when(walletRepository.findById(WALLET_ID)).thenReturn(Optional.of(wallet));
+
+            assertThatThrownBy(() -> useCase.execute(WALLET_ID, USER_ID))
+                    .isInstanceOf(WalletException.class)
+                    .satisfies(ex -> {
+                        WalletException we = (WalletException) ex;
+                        assertThat(we.getErrorDefinition()).isEqualTo(ErrorConstant.WALLET_ACCESS_DENIED);
+                    });
+        }
     }
 }

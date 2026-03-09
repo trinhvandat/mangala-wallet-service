@@ -36,15 +36,25 @@ public class CreateWalletUseCaseImpl implements CreateWalletUseCase {
         // Normalize address
         String normalizedAddress = adapter.normalizeAddress(command.getAddress());
 
-        // Check for duplicate
-        boolean exists = walletRepository.existsByUserIdAndAddressAndChainTypeAndIsActiveTrue(
+        // Check for existing wallet (idempotent behavior - return existing instead of error)
+        var existingWallet = walletRepository.findByUserIdAndAddressAndChainTypeAndIsActiveTrue(
                 command.getUserId(),
                 normalizedAddress,
                 command.getChainType().name()
         );
 
-        if (exists) {
-            throw new WalletException(ErrorConstant.WALLET_ALREADY_EXISTS);
+        if (existingWallet.isPresent()) {
+            WalletEntity existing = existingWallet.get();
+            log.info("Returning existing wallet {} for user {} on chain {} (idempotent)",
+                    existing.getId(), command.getUserId(), command.getChainType());
+            return Response.builder()
+                    .id(existing.getId())
+                    .userId(existing.getUserId())
+                    .address(existing.getAddress())
+                    .chainType(command.getChainType())
+                    .label(existing.getLabel())
+                    .createdAt(existing.getCreatedAt())
+                    .build();
         }
 
         // Create wallet entity

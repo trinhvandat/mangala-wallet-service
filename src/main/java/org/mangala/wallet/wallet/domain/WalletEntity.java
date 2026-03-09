@@ -52,4 +52,7 @@ public class WalletEntity {
 
     @Column(name = "last_synced_at")
     private LocalDateTime lastSyncedAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

@@ -65,8 +65,8 @@ class CreateWalletUseCaseImplTest {
         when(chainAdapterResolver.getAdapter(CHAIN_TYPE)).thenReturn(Optional.of(chainAdapter));
         when(chainAdapter.isValidAddress(ADDRESS)).thenReturn(true);
         when(chainAdapter.normalizeAddress(ADDRESS)).thenReturn(NORMALIZED_ADDRESS);
-        when(walletRepository.existsByUserIdAndAddressAndChainTypeAndIsActiveTrue(
-                USER_ID, NORMALIZED_ADDRESS, CHAIN_TYPE.name())).thenReturn(false);
+        when(walletRepository.findByUserIdAndAddressAndChainTypeAndIsActiveTrue(
+                USER_ID, NORMALIZED_ADDRESS, CHAIN_TYPE.name())).thenReturn(Optional.empty());
 
         UUID walletId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
@@ -141,8 +141,9 @@ class CreateWalletUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("should throw exception when wallet already exists")
-    void walletAlreadyExists() {
+    @DisplayName("should return existing wallet when duplicate (idempotent behavior)")
+    void walletAlreadyExistsReturnsExisting() {
+        // Given
         CreateWalletUseCase.Command command = CreateWalletUseCase.Command.builder()
                 .userId(USER_ID)
                 .address(ADDRESS)
@@ -150,19 +151,36 @@ class CreateWalletUseCaseImplTest {
                 .label(LABEL)
                 .build();
 
+        UUID existingWalletId = UUID.randomUUID();
+        LocalDateTime existingCreatedAt = LocalDateTime.now().minusDays(1);
+        WalletEntity existingWallet = WalletEntity.builder()
+                .id(existingWalletId)
+                .userId(USER_ID)
+                .address(NORMALIZED_ADDRESS)
+                .chainType(CHAIN_TYPE.name())
+                .label("Original Label")
+                .isActive(true)
+                .createdAt(existingCreatedAt)
+                .build();
+
         when(chainAdapterResolver.getAdapter(CHAIN_TYPE)).thenReturn(Optional.of(chainAdapter));
         when(chainAdapter.isValidAddress(ADDRESS)).thenReturn(true);
         when(chainAdapter.normalizeAddress(ADDRESS)).thenReturn(NORMALIZED_ADDRESS);
-        when(walletRepository.existsByUserIdAndAddressAndChainTypeAndIsActiveTrue(
-                USER_ID, NORMALIZED_ADDRESS, CHAIN_TYPE.name())).thenReturn(true);
+        when(walletRepository.findByUserIdAndAddressAndChainTypeAndIsActiveTrue(
+                USER_ID, NORMALIZED_ADDRESS, CHAIN_TYPE.name())).thenReturn(Optional.of(existingWallet));
 
-        assertThatThrownBy(() -> useCase.execute(command))
-                .isInstanceOf(WalletException.class)
-                .satisfies(ex -> {
-                    WalletException we = (WalletException) ex;
-                    assertThat(we.getErrorDefinition()).isEqualTo(ErrorConstant.WALLET_ALREADY_EXISTS);
-                });
+        // When
+        CreateWalletUseCase.Response response = useCase.execute(command);
 
+        // Then - should return existing wallet, not create new one
+        assertThat(response.getId()).isEqualTo(existingWalletId);
+        assertThat(response.getUserId()).isEqualTo(USER_ID);
+        assertThat(response.getAddress()).isEqualTo(NORMALIZED_ADDRESS);
+        assertThat(response.getChainType()).isEqualTo(CHAIN_TYPE);
+        assertThat(response.getLabel()).isEqualTo("Original Label"); // Original label preserved
+        assertThat(response.getCreatedAt()).isEqualTo(existingCreatedAt);
+
+        // Verify no save was called
         verify(walletRepository, never()).save(any());
     }
 }

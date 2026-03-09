@@ -7,9 +7,12 @@ import org.mangala.wallet.shared.exception.WalletException;
 import org.mangala.wallet.wallet.adapter.repository.WalletRepository;
 import org.mangala.wallet.wallet.domain.WalletEntity;
 import org.mangala.wallet.wallet.usecase.DeleteWalletUseCase;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -21,19 +24,34 @@ public class DeleteWalletUseCaseImpl implements DeleteWalletUseCase {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"portfolioSummary", "portfolioSummaryByChain"}, allEntries = true)
     public void execute(UUID walletId, UUID userId) {
         log.debug("Deleting wallet {} for user {}", walletId, userId);
 
-        WalletEntity wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new WalletException(ErrorConstant.WALLET_NOT_FOUND));
+        Optional<WalletEntity> walletOpt = walletRepository.findById(walletId);
+
+        // Idempotent: if wallet doesn't exist, return silently
+        if (walletOpt.isEmpty()) {
+            log.debug("Wallet {} not found, returning silently (idempotent delete)", walletId);
+            return;
+        }
+
+        WalletEntity wallet = walletOpt.get();
 
         // Verify ownership
         if (!wallet.getUserId().equals(userId)) {
             throw new WalletException(ErrorConstant.WALLET_ACCESS_DENIED);
         }
 
-        // Soft delete
+        // Idempotent: if already deleted, return silently
+        if (!wallet.getIsActive() || wallet.getDeletedAt() != null) {
+            log.debug("Wallet {} already deleted, returning silently (idempotent delete)", walletId);
+            return;
+        }
+
+        // Soft delete with timestamp
         wallet.setIsActive(false);
+        wallet.setDeletedAt(LocalDateTime.now());
         walletRepository.save(wallet);
 
         log.info("Deleted wallet {} for user {}", walletId, userId);

@@ -2,6 +2,8 @@ package org.mangala.wallet.chain.config;
 
 import org.mangala.wallet.chain.adapter.evm.EvmAddressValidator;
 import org.mangala.wallet.chain.adapter.evm.EvmChainAdapter;
+import org.mangala.wallet.chain.adapter.solana.SolanaAddressValidator;
+import org.mangala.wallet.chain.adapter.solana.SolanaChainAdapter;
 import org.mangala.wallet.chain.domain.ChainType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -36,5 +38,17 @@ public class ChainAdapterConfig {
     @ConditionalOnProperty(prefix = "application.wallet.chains.arbitrum", name = "rpc-url")
     public EvmChainAdapter arbitrumChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
         return new EvmChainAdapter(ChainType.ARBITRUM, properties, validator, tokenConfig);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "application.wallet.chains.sepolia", name = "rpc-url")
+    public EvmChainAdapter sepoliaChainAdapter(ChainProperties properties, EvmAddressValidator validator, TokenConfig tokenConfig) {
+        return new EvmChainAdapter(ChainType.SEPOLIA, properties, validator, tokenConfig);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "application.wallet.chains.solana", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public SolanaChainAdapter solanaChainAdapter(SolanaAddressValidator validator) {
+        return new SolanaChainAdapter(validator);
     }
 }

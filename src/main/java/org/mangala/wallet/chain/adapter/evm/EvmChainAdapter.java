@@ -242,6 +242,8 @@ public class EvmChainAdapter implements ChainAdapter {
             case BSC -> "BNB";
             case POLYGON -> "Polygon";
             case ARBITRUM -> "Ethereum (Arbitrum)";
+            case SEPOLIA -> "Sepolia ETH";
+            case SOLANA -> throw new IllegalArgumentException("SOLANA is not an EVM chain");
         };
     }
 }
